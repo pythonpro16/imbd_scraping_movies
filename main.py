@@ -8,26 +8,44 @@ headers = {
 }
 url = "https://www.imdb.com/chart/top"
 imbd_url = 'https://www.imdb.com'
-def get_next_page_details(title_url:str):
+movie_num = 1
+def get_next_page_details(title_url:str)-> tuple[list,str, str, str]:
+    global movie_num
+
+    print(f"IMDE page of movie {movie_num}")
+    movie_num += 1
     url = imbd_url + title_url
     response = requests.get(url, headers=headers)
     if response.status_code == 200:
       soup = BeautifulSoup(response.text,'html.parser')
       geners = soup.find_all("a", class_="ipc-metadata-list-item__list-content-item")
       gener_list = soup.find_all('a', class_='ipc-chip ipc-chip--on-baseAlt')
-      review_title = soup.find('span', class_='sc-27d2f80b-1').text.strip()
-      top_review = soup.find('div', class_='ipc-html-content-inner-div').text.strip()
 
+      # GETTING REVIEW TITLE
+      review_title = soup.find('span', class_='sc-27d2f80b-1').text.strip()
+
+      # GETTING CASTS
+      casts = soup.find_all('a', class_='sc-bfec09a1-1')
+      star_casts = " | ".join([n.text for n in casts[:5]])
+
+      # GETTING TOP REVIEW TEXT
+      top_review = ''
+      outer_div = soup.find('div', class_='sc-f65f65be-0')
+      if outer_div:
+        inner_div = outer_div.find('div', class_='ipc-html-content-inner-div')
+        if inner_div:
+          top_review = inner_div.get_text(strip=True)
+
+      # GET GENERS
       all_geners = []
       for g in gener_list:
         all_geners.append(g.find('span', class_='ipc-chip__text').text.strip())
 
 
-      # print(all_geners)
     else:
       all_geners = []
       print("next page is loade failed")
-    return all_geners,review_title,top_review,
+    return (all_geners,review_title,top_review, star_casts)
 
 response = requests.get(url, headers=headers)
 # match = re.search(r'(\d+\.\d+)', text)
@@ -44,6 +62,7 @@ if response.status_code == 200:
     all_geners = []
     top_rating = []
     top_review_titles = []
+    all_casts = []
 
     # Find and iterate over the movie entries with the specified class
     movie_entries = soup.find_all("li", class_="ipc-metadata-list-summary-item")
@@ -51,13 +70,15 @@ if response.status_code == 200:
     for movie in movie_entries:
         # Extract movie data from each movie entry
         next_page_href = movie.find('a').get('href')
-        
-        geners, top_review_title, top_review = get_next_page_details(next_page_href)
+
+        geners, top_review_title, top_review,casts = get_next_page_details(next_page_href)
         top_review_titles.append(top_review_title)
         top_rating.append(top_review)
         gener = " | ".join(geners)
         all_geners.append(gener)
         movie_name_with_index:str = movie.find("h3", class_="ipc-title__text").text.strip()
+
+        all_casts.append(casts)
         if movie_name_with_index.count('.') == 1:
             [mv_index, mv_name] = movie_name_with_index.split('.')
         else:
@@ -87,8 +108,9 @@ if response.status_code == 200:
         # top_rating.append(movie.find("span", class_="ipc-metadata-list-item").text.strip())
         index += 1
     with open("imdb_top_rated_movies.csv", "w", newline="") as csvfile:
-        fieldnames = ["movie_id", "movie_name", "released_year", "movie_duration", 
-                      "censor_certificate","rating", "geners","total_ratings", "top_rating_title", "top_rating"]
+        fieldnames = ["movie_id", "movie_name", "released_year", "movie_duration",
+                      "censor_certificate","rating", "geners","total_ratings",
+                      "top_rating_title", "top_rating", "casts"]
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
 
@@ -103,7 +125,8 @@ if response.status_code == 200:
                 "geners": all_geners[i],
                 "total_ratings": total_ratings[i],
                 "top_rating_title": top_review_titles[i],
-                "top_rating":top_rating[i]
+                "top_rating":top_rating[i],
+                "casts": all_casts[i]
             })
 
 else:
